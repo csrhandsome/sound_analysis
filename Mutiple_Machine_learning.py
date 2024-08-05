@@ -19,14 +19,24 @@ from sklearn.metrics import confusion_matrix
 import torch.nn.functional as F
 import seaborn as sns
 from glob import glob
-EPOCH = 49             # train the training data n times
+EPOCH = 48             # train the training data n times
 BATCH_SIZE = 128       # 一批训练的量
-INPUT_SIZE = 1024        # input size 特征的数量
+INPUT_SIZE = 2048        # input size 特征的数量
 LR = 0.01                # learning rate
 count = 4              # 类别数量  
 HIDDEN_SIZE = 64        # 隐藏层大小
 SHUFFLE=True        # 是否打乱数据集
 t0 = time()
+class MyDataset(Dataset):#元组用的数据集，可以与常规的对比学习
+        def __init__(self, data_list):
+            self.data_list = data_list
+        def __len__(self):
+            return len(self.data_list)
+        def __getitem__(self, index):
+            item = self.data_list[index]
+            features = torch.tensor(item[0], dtype=torch.float32)
+            lable = torch.tensor(item[1], dtype=torch.int64)
+            return features, lable
 class CustomDataset(Dataset):
         def __init__(self, features, labels):
             self.features = torch.tensor(features.to_numpy(), dtype=torch.float32)
