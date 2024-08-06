@@ -12,16 +12,10 @@ from Mutiple_Machine_learning import Mutiple_Methods as mm
 from Mutiple_Machine_learning import LSTM 
 from sklearn import preprocessing
 from scipy.signal import medfilt
+import threading
 #将分帧后的音频数据传给train_test_split进行数据集的划分，导致了模型准确率过高，原因是否为分帧后的每一个数据都非常相似，因此相当于测试集和训练集的区别不大，导致预测无效
 #如果数据非常的相似，不能合成一个进行后使用sklearn进行训练，不然会导致数据泄露，应当将文件分成训练集和测试集后，在进行数据处理
-def getpicture(y):
-    sns.set_theme(style="white",palette=None)
-    color_pal=plt.rcParams["axes.prop_cycle"].by_key()["color"]
-    color_cycle=cycle(plt.rcParams["axes.prop_cycle"].by_key()["color"])
-    pd.Series(y).plot(figsize=(10,5),lw=1,
-                  title='Raw Audio Exampel',
-                  color=color_pal[0])
-    plt.show()
+
 
 def get_trimmed_picture(audio_file):
     y, sr = librosa.load(audio_file)
@@ -85,16 +79,20 @@ def read_audio(audio_file, frame_length, hop_length):
 
 
 def become_data(path, name,SF,id):
-    Frame_Length=2048
-    Hop_Length=200
+    Frame_Length=4096
+    Hop_Length=400
     audio_files = glob(path)
     if not audio_files:
         print(f"No audio files found in {path}")
         return
     for i, audio_file in enumerate(audio_files):
         y,sr=read_audio(audio_file,Frame_Length,Hop_Length)
-        # frame_size:帧大小 hop_length: 帧移 
         frames = librosa.util.frame(y, frame_length=Frame_Length, hop_length=Hop_Length).T
+        haming_window=np.hamming(Frame_Length)
+        frames=frames*haming_window
+        #y = medfilt(y, 3)  # 中值滤波
+        # frame_size:帧大小 hop_length: 帧移 
+        
         # 对每一帧进行傅里叶变换
         frames = np.abs(np.fft.fft(frames, axis=1))
         print(f'audio_file is {audio_file}')
@@ -123,11 +121,11 @@ def become_data(path, name,SF,id):
         df_lable=pd.DataFrame({'lable':[df_lable if x==1 else 0 for x in SF]})
         df=pd.concat([df,df_lable],axis=1) 
         if name=='hengming':
-            filepath = r'D:\桌面\sound_analysis\hengming_land_fft\{}{}.csv'.format(name, id)
+            filepath = r'D:\桌面\sound_analysis\hengming_fft\{}{}.csv'.format(name, id)
         elif name=='tuqi':
-            filepath = r'D:\桌面\sound_analysis\tuqi_land_fft\{}{}.csv'.format(name, id)
+            filepath = r'D:\桌面\sound_analysis\tuqi_fft\{}{}.csv'.format(name, id)
         elif name=='xiqi':
-            filepath = r'D:\桌面\sound_analysis\xiqi_land_fft\{}{}.csv'.format(name, id)
+            filepath = r'D:\桌面\sound_analysis\xiqi_fft\{}{}.csv'.format(name, id)
         df=df.fillna(0,axis=1)#去除NA
         df.to_csv(filepath, index=False)  # 导出为 CSV 文件
         print(f"Data has been saved to {filepath}") 
@@ -196,11 +194,11 @@ def extract_feature(df,name='unknown'):
 
 def get_T1_T2(audio_file):
     IS = 0.25  # 静音段的长度，单位是秒
-    wnd = 2048  # 帧大小
-    inc = 200  # 帧移
+    wnd = 4096  # 帧大小
+    inc = 400  # 帧移
     thr1 = 0.99  # 阈值1
     thr2 = 0.96  # 阈值2
-    wlen = 2048  # 窗口长度
+    wlen = 4096  # 窗口长度
     y, sr = read_audio(audio_file, wnd, inc)
     NIS = int((IS * sr - wlen) // inc + 1)  # 计算静音段帧数
     # 将音频信号分帧，帧大小为 wnd，帧移为 inc，结果是一个二维数组，每行是一个帧
@@ -395,15 +393,23 @@ def conbine_land_water_and_train(water_path,land_path):
     mm.LSTM_TRAIN(train_df.iloc[:,0:-1],test_df.iloc[:,0:-1],train_df['lable'],test_df['lable'],len(train_df['lable'].value_counts()))
 
 if __name__ == '__main__':
-    '''prepare_data(r'hengming_land/*.wav','hengming')'''
-    prepare_data(r'tuqi_land/*.wav','tuqi')
-    prepare_data(r'xiqi_land/*.wav','xiqi')
+    # 使用args参数
+    thread1 = threading.Thread(target=prepare_data, args=(r'tuqi/*.mp3', 'tuqi'), daemon=True)
+    thread1.start()
+    thread2 = threading.Thread(target=prepare_data, args=(r'xiqi/*.mp3', 'xiqi'), daemon=True)
+    thread2.start()
+    thread3 = threading.Thread(target=prepare_data, args=(r'hengming/*.mp3', 'hengming'), daemon=True)
+    thread3.start()
+    threads=[thread1,thread2,thread3]
+    for t in threads:
+        t.join()
+    # 等待三个线程结束
     '''df=become_one(r'hengming_fft/*.csv',r'tuqi_fft/*.csv',r'xiqi_fft/*.csv')
     X_train,X_test,y_train,y_test=mm.split_data(df) 
     mm.LSTM_TRAIN(X_train,X_test,y_train,y_test,len(df['lable'].value_counts()))'''
     #read_and_train_data(r'total_data.csv')
     #read_and_train_data_with_better_split(r'hengming_fft_no01/*.csv',r'tuqi_fft_no01/*.csv',r'xiqi_fft_no01/*.csv')
-    read_and_train_data_with_better_split(r'hengming_land_fft/*.csv',r'tuqi_land_fft/*.csv',r'xiqi_land_fft/*.csv')
+    read_and_train_data_with_better_split(r'hengming_fft/*.csv',r'tuqi_fft/*.csv',r'xiqi_fft/*.csv')
     #conbine_land_water_and_train([r'hengming_fft_no01/*.csv',r'tuqi_fft_no01/*.csv',r'xiqi_fft_no01/*.csv']
                                  #,[r'hengming_land_fft/*.csv',r'tuqi_land_fft/*.csv',r'xiqi_land_fft/*.csv'])
     #plot_audio_and_classification(r'hengming_land/24_07_14_15_02_14.wav')

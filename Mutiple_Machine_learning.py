@@ -21,8 +21,8 @@ import seaborn as sns
 from glob import glob
 EPOCH = 48             # train the training data n times
 BATCH_SIZE = 128       # 一批训练的量
-INPUT_SIZE = 2048        # input size 特征的数量
-LR = 0.01                # learning rate
+INPUT_SIZE = 4096        # input size 特征的数量
+LR = 0.0001                # learning rate
 count = 4              # 类别数量  
 HIDDEN_SIZE = 64        # 隐藏层大小
 SHUFFLE=True        # 是否打乱数据集
@@ -53,7 +53,7 @@ class LSTM(nn.Module):
             self.rnn = nn.LSTM(
                 input_size=INPUT_SIZE,
                 hidden_size=HIDDEN_SIZE,  # 隐藏层大小
-                num_layers=3,  # 增加LSTM层数
+                num_layers=6,  # 增加LSTM层数
                 batch_first=True,
                 dropout=0.3    # 增加Dropout层防止过拟合
             )
@@ -137,6 +137,7 @@ class Mutiple_Methods:
     print(lstm)
 
     criterion = nn.CrossEntropyLoss()
+    #criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(lstm.parameters(), lr=LR)
 
     steps = [] 
