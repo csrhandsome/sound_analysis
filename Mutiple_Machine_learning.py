@@ -1,5 +1,4 @@
 import torch.nn as nn
-import torchaudio as ta
 import torch
 import pandas as pd  
 import numpy as np  
@@ -19,6 +18,9 @@ from sklearn.metrics import confusion_matrix
 import torch.nn.functional as F
 import seaborn as sns
 from glob import glob
+from torchvision import transforms
+#from cv_methods import CVMethods
+import cv2
 EPOCH = 48             # train the training data n times
 BATCH_SIZE = 128       # 一批训练的量
 INPUT_SIZE = 4096        # input size 特征的数量
@@ -37,7 +39,8 @@ class MyDataset(Dataset):#元组用的数据集，可以与常规的对比学习
             features = torch.tensor(item[0], dtype=torch.float32)
             lable = torch.tensor(item[1], dtype=torch.int64)
             return features, lable
-class CustomDataset(Dataset):
+        
+class CustomDataset(Dataset):#dataframe用的数据集
         def __init__(self, features, labels):
             self.features = torch.tensor(features.to_numpy(), dtype=torch.float32)
             self.labels = torch.tensor(labels.to_numpy(), dtype=torch.int64)
@@ -45,7 +48,6 @@ class CustomDataset(Dataset):
             return len(self.labels)
         def __getitem__(self, index):
             return self.features[index], self.labels[index]
-        
 
 class LSTM(nn.Module):
         def __init__(self):
@@ -76,8 +78,9 @@ class MLP(nn.Module):
         out = self.relu(out)
         out = self.fc2(out)
         return out
-            
-class CustomLoss(nn.Module):#自己定义的损失函数
+    
+#自己定义的损失函数            
+class CustomLoss(nn.Module):
         def __init__(self):
             super(CustomLoss, self).__init__()
 
@@ -88,8 +91,12 @@ class CustomLoss(nn.Module):#自己定义的损失函数
             loss = F.cross_entropy(outputs, targets, ignore_index=0)
             return loss
             
-class Mutiple_Methods:
-  def split_data_with_sklearn(df):
+class MutipleMethods:
+  def __init__(self):
+    pass
+
+ 
+  def split_data_with_sklearn(self,df):#划分dataframe
     #分帧了之后，其实每个帧间隔就那么点，每个帧其实区别不大，
     #所以约等于训练集跟测试集一样一样的，导致了准确率虚高
     t0 = time()
@@ -102,9 +109,10 @@ class Mutiple_Methods:
     print("Split dataset in {} seconds".format(round(tt, 3)))
     print(f"y_train value_counts is {y_train.value_counts()}, y_test value_counts is {y_test.value_counts()}")
     #print(f"y_train value_counts is {y_train['lable'].value_counts()}, y_test value_counts is {y_test['lable'].value_counts()}")
-    return X_train,X_test,y_train,y_test
+    return X_train,X_test,y_train,y_test 
   
-  def split_data_with_size(path):
+
+  def split_data_with_size(self,path):#按文件大小划分csv
     train_df = pd.DataFrame()
     test_df = pd.DataFrame()
     audio_files = glob(path)
@@ -125,21 +133,24 @@ class Mutiple_Methods:
             train_df = pd.concat([df,train_df], axis=0, join='outer')
     print(f"Data has been splited to train and test") 
     return train_df,test_df 
+  
 
-
-  def LSTM_TRAIN(X_train, X_test, y_train, y_test, count):
+  @classmethod
+  def prepare_dataset(self,X_train, X_test, y_train, y_test):
     train_data = CustomDataset(X_train, y_train)
     test_data = CustomDataset(X_test, y_test)
     trainloader = DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=SHUFFLE)
     testloader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=SHUFFLE)
+    return train_data, test_data, trainloader, testloader
+  
 
+  def LSTM_TRAIN(self,X_train, X_test, y_train, y_test, count):
+    train_data, test_data,trainloader, testloader = self.prepare_dataset(X_train, X_test, y_train, y_test)
     lstm = LSTM()
     print(lstm)
-
     criterion = nn.CrossEntropyLoss()
     #criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(lstm.parameters(), lr=LR)
-
     steps = [] 
     accuracies = []
     for epoch in range(EPOCH):
@@ -217,7 +228,7 @@ class Mutiple_Methods:
     tt = time() - t0
     print("WHOLE time is {} seconds".format(round(tt, 3)))
 
-  def plot_roc(steps, accuracies):
+  def plot_roc(self,steps, accuracies):
     plt.plot(steps, accuracies, label='Accuracy')
     plt.xlabel('Epochs')
     plt.ylabel('Accuracy')
@@ -225,13 +236,10 @@ class Mutiple_Methods:
     plt.legend()
     plt.show()
 
-  def MLP_TRAIN(X_train, X_test, y_train, y_test, count):
+  def MLP_TRAIN(self,X_train, X_test, y_train, y_test, count):
       
-    train_data = CustomDataset(X_train, y_train)
-    test_data = CustomDataset(X_test, y_test)
-    trainloader = DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True) 
-    testloader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=True) 
-
+    train_data, test_data,trainloader, testloader = self.prepare_dataset(X_train, X_test, y_train, y_test)
+    
     mlp = MLP()
     print(mlp)
 
@@ -315,7 +323,7 @@ class Mutiple_Methods:
     tt = time() - t0
     print("WHOLE time is {} seconds".format(round(tt, 3)))
 
-  def DecisionTree(X_train,X_test,y_train,y_test):
+  def DecisionTree(self,X_train,X_test,y_train,y_test):
       # 定义参数空间
       param_dist = {
           'criterion': ['gini', 'entropy'],
@@ -351,7 +359,7 @@ class Mutiple_Methods:
       print("F is {}.".format(round(f1_score(y_test, y_predict, average='weighted'), 4)))
 
     
-  def LSTM_Predict(X_train,X_test,y_train,y_test,count):
+  def LSTM_Predict(self,X_train,X_test,y_train,y_test,count):
     EPOCH = 100              # train the training data n times
     BATCH_SIZE = 128
     TIME_STEP = None    # time step
